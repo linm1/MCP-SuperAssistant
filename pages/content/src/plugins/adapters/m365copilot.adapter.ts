@@ -26,6 +26,7 @@ export class M365CopilotAdapter extends BaseAdapterPlugin {
     'text-insertion',
     'form-submission',
     'dom-manipulation',
+    'file-attachment',
   ];
 
   // Stable selectors using data-testid and fai- prefixed class names
@@ -43,6 +44,8 @@ export class M365CopilotAdapter extends BaseAdapterPlugin {
     PLUS_BUTTON: '[data-testid="PlusMenuButton"]',
     // The whole chat input wrapper
     CHAT_INPUT_WRAPPER: '.fai-ChatInput, #m365-chat-input-shared-wrapper',
+    // Always-present hidden file input (id confirmed stable via DevTools)
+    FILE_INPUT: '#upload-file-button',
   };
 
   // URL tracking for SPA navigation
@@ -284,6 +287,68 @@ export class M365CopilotAdapter extends BaseAdapterPlugin {
       this.emitExecutionFailed('submitForm', msg);
       return false;
     }
+  }
+
+  /**
+   * Attach a file to the M365 Copilot chat input.
+   *
+   * M365 keeps a hidden <input type="file" id="upload-file-button"> always in the DOM.
+   * Confirmed via DevTools: setting .files via DataTransfer + firing 'change' triggers
+   * the upload and shows the file attachment chip ("已完成上傳").
+   *
+   * Fallback: drag-drop simulation onto the chat input wrapper.
+   */
+  async attachFile(file: File, options?: { inputElement?: HTMLInputElement }): Promise<boolean> {
+    this.context.logger.debug(`M365: attachFile called for ${file.name} (${file.size} bytes)`);
+
+    if (!file || file.size === 0) {
+      this.emitExecutionFailed('attachFile', 'Invalid file: empty or null');
+      return false;
+    }
+
+    // Primary: inject directly into the always-present hidden file input
+    const fileInput = (options?.inputElement ??
+      document.querySelector(this.selectors.FILE_INPUT)) as HTMLInputElement | null;
+
+    if (fileInput) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+        this.context.logger.debug('M365: file injected via #upload-file-button');
+        this.emitExecutionCompleted('attachFile', { fileName: file.name }, { success: true, method: 'file-input' });
+        return true;
+      } catch (e) {
+        this.context.logger.warn('M365: direct file input failed, trying drag-drop fallback', e);
+      }
+    }
+
+    // Fallback: drag-drop simulation onto the chat input area
+    try {
+      const dropZoneSelectors = this.selectors.CHAT_INPUT_WRAPPER.split(', ');
+      let dropZone: HTMLElement | null = null;
+      for (const sel of dropZoneSelectors) {
+        dropZone = document.querySelector(sel.trim()) as HTMLElement | null;
+        if (dropZone) break;
+      }
+      if (dropZone) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        dropZone.dispatchEvent(new DragEvent('dragenter', { bubbles: true, dataTransfer: dt }));
+        dropZone.dispatchEvent(new DragEvent('dragover',  { bubbles: true, dataTransfer: dt }));
+        dropZone.dispatchEvent(new DragEvent('drop',      { bubbles: true, dataTransfer: dt }));
+        this.context.logger.debug('M365: file drop simulated on chat input wrapper');
+        this.emitExecutionCompleted('attachFile', { fileName: file.name }, { success: true, method: 'drag-drop' });
+        return true;
+      }
+    } catch (e) {
+      this.context.logger.warn('M365: drag-drop fallback failed', e);
+    }
+
+    this.emitExecutionFailed('attachFile', 'File attachment failed: input not found and drag-drop failed');
+    return false;
   }
 
   /**
