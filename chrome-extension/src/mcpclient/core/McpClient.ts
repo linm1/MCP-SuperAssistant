@@ -4,6 +4,7 @@ import { LoggingMessageNotificationSchema } from '@modelcontextprotocol/sdk/type
 
 import { EventEmitter } from './EventEmitter.js';
 import { PluginRegistry } from './PluginRegistry.js';
+import { NoOpJsonSchemaValidator } from './NoOpJsonSchemaValidator.js';
 import { SSEPlugin } from '../plugins/sse/SSEPlugin.js';
 import { WebSocketPlugin } from '../plugins/websocket/WebSocketPlugin.js';
 import { StreamableHttpPlugin } from '../plugins/streamable-http/StreamableHttpPlugin.js';
@@ -180,13 +181,16 @@ export class McpClient extends EventEmitter<AllEvents> {
         });
       }
 
-      // Create MCP client
+      // Create MCP client with a CSP-safe no-op schema validator.
+      // Chrome Manifest V3 blocks new Function() (unsafe-eval), which AJV (the SDK default)
+      // uses to compile JSON schemas. This causes listTools() to throw an EvalError and
+      // return 0 tools. NoOpJsonSchemaValidator bypasses this without needing unsafe-eval.
       this.client = new Client(
         {
           name: `mcp-client-${type}`,
           version: '1.0.0',
         },
-        { capabilities: {} },
+        { capabilities: {}, jsonSchemaValidator: new NoOpJsonSchemaValidator() },
       );
 
       // Set up logging notification handler

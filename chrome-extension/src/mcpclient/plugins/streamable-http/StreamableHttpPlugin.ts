@@ -151,40 +151,27 @@ export class StreamableHttpPlugin implements ITransportPlugin {
 
     try {
       const capabilities = client.getServerCapabilities();
+      logger.debug('[StreamableHttpPlugin] Server capabilities:', JSON.stringify(capabilities));
       const primitives: any[] = [];
-      const promises: Promise<void>[] = [];
 
-      if (capabilities?.resources) {
-        promises.push(
-          client.listResources().then(({ resources }) => {
-            resources.forEach(item => primitives.push({ type: 'resource', value: item }));
-          }).catch(error => {
-            logger.warn('[StreamableHttpPlugin] Failed to list resources:', error);
-          }),
-        );
-      }
+      await Promise.all([
+        client.listResources().then(({ resources }) => {
+          resources.forEach(item => primitives.push({ type: 'resource', value: item }));
+        }).catch(error => {
+          logger.warn('[StreamableHttpPlugin] Failed to list resources:', error);
+        }),
+        client.listTools().then(({ tools }) => {
+          tools.forEach(item => primitives.push({ type: 'tool', value: item }));
+        }).catch(error => {
+          logger.warn('[StreamableHttpPlugin] Failed to list tools:', error);
+        }),
+        client.listPrompts().then(({ prompts }) => {
+          prompts.forEach(item => primitives.push({ type: 'prompt', value: item }));
+        }).catch(error => {
+          logger.warn('[StreamableHttpPlugin] Failed to list prompts:', error);
+        }),
+      ]);
 
-      if (capabilities?.tools) {
-        promises.push(
-          client.listTools().then(({ tools }) => {
-            tools.forEach(item => primitives.push({ type: 'tool', value: item }));
-          }).catch(error => {
-            logger.warn('[StreamableHttpPlugin] Failed to list tools:', error);
-          }),
-        );
-      }
-
-      if (capabilities?.prompts) {
-        promises.push(
-          client.listPrompts().then(({ prompts }) => {
-            prompts.forEach(item => primitives.push({ type: 'prompt', value: item }));
-          }).catch(error => {
-            logger.warn('[StreamableHttpPlugin] Failed to list prompts:', error);
-          }),
-        );
-      }
-
-      await Promise.all(promises);
       logger.debug(`Retrieved ${primitives.length} primitives`);
       return primitives;
     } catch (error) {

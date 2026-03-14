@@ -296,14 +296,15 @@ async function initializeExtension() {
         
         const tools = normalizeTools(primitives);
         logger.debug(`Broadcasting ${tools.length} normalized initial tools`);
-        
+
         broadcastToolsUpdateToContentScripts(tools);
+        retryToolBroadcastIfEmpty(tools, serverUrl, connectionType).catch(err => logger.warn('[Background] Retry failed:', err));
       } catch (error) {
         logger.warn('[Background] Error broadcasting initial tools:', error);
       }
     }
   };
-  
+
   // Run the initial connection attempt immediately
   checkInitialConnectionStatus();
 }
@@ -345,12 +346,13 @@ async function tryConnectToServer(uri: string, type: ConnectionType = connection
       
       const tools = normalizeTools(primitives);
       logger.debug(`Broadcasting ${tools.length} normalized tools after successful connection`);
-      
+
       broadcastToolsUpdateToContentScripts(tools);
+      retryToolBroadcastIfEmpty(tools, uri, type).catch(err => logger.warn('[Background] Retry failed:', err));
     } catch (toolsError) {
       logger.warn('[Background] Error broadcasting tools after connection:', toolsError);
     }
-    
+
     connectionAttemptCount = 0; // Reset counter on success
   } catch (error: any) {
     const errorCategory = categorizeToolError(error instanceof Error ? error : new Error(String(error)));
@@ -867,6 +869,7 @@ async function handleMcpMessage(
                 const primitives = await getPrimitivesWithBackwardsCompatibility(config.uri, true, newType);
                 const tools = normalizeTools(primitives);
                 broadcastToolsUpdateToContentScripts(tools);
+                retryToolBroadcastIfEmpty(tools, config.uri, newType).catch(err => logger.warn('[Background] Retry failed:', err));
                 logger.debug(`Broadcasted ${tools.length} normalized tools after config update`);
               } catch (toolError) {
                 logger.warn('[Background] Failed to fetch tools after config update:', toolError);
@@ -1006,9 +1009,7 @@ function broadcastToolsUpdateToContentScripts(tools: any[]) {
   
   const broadcastMessage: BaseMessage & { payload: ToolUpdateBroadcast } = {
     type: 'mcp:tool-update',
-    payload: {
-      tools
-    },
+    payload: tools,
     origin: 'background',
     timestamp: Date.now()
   };
@@ -1025,8 +1026,29 @@ function broadcastToolsUpdateToContentScripts(tools: any[]) {
 }
 
 /**
+ * If tools broadcast returned 0 tools, retry once after 3 seconds.
+ * Handles servers that complete SSE handshake before MCP initialize resolves.
+ */
+async function retryToolBroadcastIfEmpty(tools: any[], uri: string, type: ConnectionType): Promise<void> {
+  if (tools.length > 0) return;
+  logger.debug('[Background] 0 tools returned, scheduling retry in 3s...');
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  if (!isConnected) return;
+  try {
+    const retryPrimitives = await getPrimitivesWithBackwardsCompatibility(uri, true, type);
+    const retryTools = normalizeTools(retryPrimitives);
+    if (retryTools.length > 0) {
+      logger.debug(`[Background] Retry returned ${retryTools.length} tools, broadcasting`);
+      broadcastToolsUpdateToContentScripts(retryTools);
+    }
+  } catch (err) {
+    logger.warn('[Background] Retry tool fetch failed:', err);
+  }
+}
+
+/**
  * Broadcast server config update to all content scripts via context bridge
- * 
+ *
  * @param config - The updated server configuration
  */
 function broadcastConfigUpdateToContentScripts(config: { uri: string; connectionType?: string }) {

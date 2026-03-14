@@ -221,45 +221,29 @@ export class WebSocketPlugin implements ITransportPlugin {
 
     try {
       const capabilities = client.getServerCapabilities();
+      logger.debug('[WebSocketPlugin] Server capabilities:', JSON.stringify(capabilities));
+
       const primitives: any[] = [];
-      const promises: Promise<void>[] = [];
 
-      if (capabilities?.resources) {
-        promises.push(
-          client.listResources().then(({ resources }) => {
-            resources.forEach(item => primitives.push({ type: 'resource', value: item }));
-          }),
-        );
-      }
+      const promises: Promise<void>[] = [
+        client.listTools()
+          .then(({ tools }) => { tools.forEach(item => primitives.push({ type: 'tool', value: item })); })
+          .catch(error => { logger.warn('[WebSocketPlugin] listTools() failed:', error instanceof Error ? error.message : String(error)); }),
 
-      if (capabilities?.tools) {
-        promises.push(
-          client.listTools().then(({ tools }) => {
-            tools.forEach(item => primitives.push({ type: 'tool', value: item }));
-          }),
-        );
-      }
+        client.listResources()
+          .then(({ resources }) => { resources.forEach(item => primitives.push({ type: 'resource', value: item })); })
+          .catch(error => { logger.warn('[WebSocketPlugin] listResources() failed:', error instanceof Error ? error.message : String(error)); }),
 
-      if (capabilities?.prompts) {
-        promises.push(
-          client.listPrompts().then(({ prompts }) => {
-            prompts.forEach(item => primitives.push({ type: 'prompt', value: item }));
-          }),
-        );
-      }
+        client.listPrompts()
+          .then(({ prompts }) => { prompts.forEach(item => primitives.push({ type: 'prompt', value: item })); })
+          .catch(error => { logger.warn('[WebSocketPlugin] listPrompts() failed:', error instanceof Error ? error.message : String(error)); }),
+      ];
 
       await Promise.all(promises);
       logger.debug(`Retrieved ${primitives.length} primitives`);
       return primitives;
     } catch (error) {
       logger.error('[WebSocketPlugin] Failed to get primitives:', error);
-
-      // Check if this is a connection-related error
-      if (!this.isConnected()) {
-        this.isConnectedFlag = false;
-        throw new Error('WebSocket connection lost while getting primitives');
-      }
-
       throw error;
     }
   }

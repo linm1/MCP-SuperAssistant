@@ -191,32 +191,23 @@ export class SSEPlugin implements ITransportPlugin {
 
     try {
       const capabilities = client.getServerCapabilities();
+      logger.debug('[SSEPlugin] Server capabilities:', JSON.stringify(capabilities));
+
       const primitives: any[] = [];
-      const promises: Promise<void>[] = [];
 
-      if (capabilities?.resources) {
-        promises.push(
-          client.listResources().then(({ resources }) => {
-            resources.forEach(item => primitives.push({ type: 'resource', value: item }));
-          }),
-        );
-      }
+      const promises: Promise<void>[] = [
+        client.listTools()
+          .then(({ tools }) => { tools.forEach(item => primitives.push({ type: 'tool', value: item })); })
+          .catch(error => { logger.warn('[SSEPlugin] listTools() failed:', error instanceof Error ? error.message : String(error)); }),
 
-      if (capabilities?.tools) {
-        promises.push(
-          client.listTools().then(({ tools }) => {
-            tools.forEach(item => primitives.push({ type: 'tool', value: item }));
-          }),
-        );
-      }
+        client.listResources()
+          .then(({ resources }) => { resources.forEach(item => primitives.push({ type: 'resource', value: item })); })
+          .catch(error => { logger.warn('[SSEPlugin] listResources() failed:', error instanceof Error ? error.message : String(error)); }),
 
-      if (capabilities?.prompts) {
-        promises.push(
-          client.listPrompts().then(({ prompts }) => {
-            prompts.forEach(item => primitives.push({ type: 'prompt', value: item }));
-          }),
-        );
-      }
+        client.listPrompts()
+          .then(({ prompts }) => { prompts.forEach(item => primitives.push({ type: 'prompt', value: item })); })
+          .catch(error => { logger.warn('[SSEPlugin] listPrompts() failed:', error instanceof Error ? error.message : String(error)); }),
+      ];
 
       await Promise.all(promises);
       logger.debug(`Retrieved ${primitives.length} primitives`);

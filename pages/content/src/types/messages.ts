@@ -103,9 +103,7 @@ export interface ConnectionStatusChangedBroadcast {
   timestamp: number;
 }
 
-export interface ToolUpdateBroadcast {
-  tools: Tool[];
-}
+export type ToolUpdateBroadcast = Tool[];
 
 export interface ServerConfigUpdatedBroadcast {
   config: ServerConfig;
