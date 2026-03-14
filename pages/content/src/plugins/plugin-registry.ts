@@ -29,6 +29,7 @@ import { ChatGPTAdapter } from './adapters/chatgpt.adapter';
 import { KimiAdapter } from './adapters/kimi.adapter';
 import { ZAdapter } from './adapters/z.adapter';
 import { QwenAdapter } from './adapters/qwenchat.adapter';
+import { M365CopilotAdapter } from './adapters/m365copilot.adapter';
 import { RemoteConfigPlugin } from './remote-config.plugin';
 
 
@@ -998,6 +999,29 @@ class PluginRegistry {
           name: 'Qwen Adapter',
           description: 'Specialized adapter for Qwen AI with chat input, form submission, and file attachment support',
           version: '2.0.0',
+          enabled: true,
+          priority: 5,
+          settings: {
+            logLevel: 'info',
+            urlCheckInterval: 1000,
+          },
+        },
+      });
+
+      // Register M365CopilotAdapter factory for Microsoft 365 Copilot Chat
+      // Supports both direct (m365.cloud.microsoft) and MCAS proxy (*.mcas.ms) hostnames
+      this.registerAdapterFactory({
+        name: 'm365copilot-adapter',
+        version: '1.0.0',
+        type: 'website-adapter',
+        hostnames: ['m365.cloud.microsoft', /m365\.cloud\.microsoft(\.mcas\.ms)?/],
+        capabilities: ['text-insertion', 'form-submission', 'dom-manipulation'],
+        create: () => new M365CopilotAdapter(),
+        config: {
+          id: 'm365copilot-adapter',
+          name: 'M365 Copilot Adapter',
+          description: 'Specialized adapter for Microsoft 365 Copilot Chat with text insertion and form submission support',
+          version: '1.0.0',
           enabled: true,
           priority: 5,
           settings: {

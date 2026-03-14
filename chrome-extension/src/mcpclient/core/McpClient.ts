@@ -206,7 +206,18 @@ export class McpClient extends EventEmitter<AllEvents> {
         }, connectionTimeout);
       });
 
-      await Promise.race([connectionPromise, timeoutPromise]);
+      try {
+        await Promise.race([connectionPromise, timeoutPromise]);
+      } catch (connectError) {
+        logger.error(`[McpClient] Transport connection failed:`, {
+          errorType: connectError instanceof Error ? connectError.constructor.name : typeof connectError,
+          errorMessage: connectError instanceof Error ? connectError.message : String(connectError),
+          errorStack: connectError instanceof Error ? connectError.stack : undefined,
+          transportType: type,
+          uri,
+        });
+        throw connectError;
+      }
       logger.debug(`MCP client connected successfully`);
 
       // Store connection state

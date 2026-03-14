@@ -47,7 +47,11 @@ const manifest = {
     '*://*.kimi.com/*',
     '*://*.chat.z.ai/*',
     '*://*.chat.qwen.ai/*',
-
+    // Microsoft 365 Copilot Chat (direct and MCAS enterprise proxy)
+    '*://*.cloud.microsoft/*',
+    '*://*.cloud.microsoft.mcas.ms/*',
+    'http://localhost/*',
+    'http://127.0.0.1/*',
   ],
 
   permissions: ['storage', 'clipboardWrite'],
@@ -160,6 +164,12 @@ const manifest = {
     },
     {
       matches: ['*://*.chat.qwen.ai/*'],
+      js: ['content/index.iife.js'],
+      run_at: 'document_idle',
+    },
+    // Microsoft 365 Copilot Chat (direct and MCAS enterprise proxy)
+    {
+      matches: ['*://*.cloud.microsoft/*', '*://*.cloud.microsoft.mcas.ms/*'],
       js: ['content/index.iife.js'],
       run_at: 'document_idle',
     },

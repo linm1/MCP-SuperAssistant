@@ -36,7 +36,8 @@ export class SSEPlugin implements ITransportPlugin {
   }
 
   async connect(uri: string): Promise<Transport> {
-    logger.debug(`Creating transport for: ${uri}`);
+    logger.debug(`[SSEPlugin] Creating transport for: ${uri}`);
+    logger.debug(`[SSEPlugin] Environment check - fetch available: ${typeof fetch !== 'undefined'}, EventSource available: ${typeof EventSource !== 'undefined'}`);
 
     try {
       const transport = await this.createConnection(uri);
@@ -44,7 +45,11 @@ export class SSEPlugin implements ITransportPlugin {
       logger.debug('[SSEPlugin] Transport created successfully');
       return transport;
     } catch (error) {
-      logger.error('[SSEPlugin] Transport creation failed:', error);
+      logger.error('[SSEPlugin] Transport creation failed:', {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        uri,
+      });
       throw error;
     }
   }
@@ -53,7 +58,25 @@ export class SSEPlugin implements ITransportPlugin {
     try {
       // Validate and parse URI
       const url = new URL(uri);
-      logger.debug(`Creating SSE transport for: ${url.toString()}`);
+      logger.debug(`[SSEPlugin] Creating SSE transport for: ${url.toString()}`);
+
+      // Pre-flight check: verify server is reachable before creating transport
+      try {
+        const preflight = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { 'Accept': 'text/event-stream' },
+          signal: AbortSignal.timeout(5000),
+        });
+        logger.debug(`[SSEPlugin] Pre-flight check: status=${preflight.status}, content-type=${preflight.headers.get('content-type')}`);
+        // Abort the preflight response body to free resources
+        await preflight.body?.cancel();
+      } catch (preflightError) {
+        logger.error(`[SSEPlugin] Pre-flight fetch failed:`, {
+          errorType: preflightError instanceof Error ? preflightError.constructor.name : typeof preflightError,
+          errorMessage: preflightError instanceof Error ? preflightError.message : String(preflightError),
+        });
+        throw new Error(`SSE Plugin: Server unreachable at ${uri}. Pre-flight check failed: ${preflightError instanceof Error ? preflightError.message : String(preflightError)}`);
+      }
 
       // Create SSE transport
       const transport = new SSEClientTransport(url);
