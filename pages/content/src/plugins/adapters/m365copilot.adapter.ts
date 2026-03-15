@@ -103,6 +103,7 @@ export class M365CopilotAdapter extends BaseAdapterPlugin {
     this.injectM365ButtonStyles();
     this.setupDOMObservers();
     this.setupUIIntegration();
+    this.injectJSONExtractor();
 
     this.context.eventBus.emit('adapter:activated', {
       pluginName: this.name,
@@ -712,6 +713,21 @@ export class M365CopilotAdapter extends BaseAdapterPlugin {
 
   private generateCallId(): string {
     return `m365-copilot-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Inject the JSON function call extractor script into the M365 page.
+   * The extractor monitors <message-content> elements for inline JSON function call
+   * sequences and wraps them in <pre class="json-function-call"> elements that the
+   * render pipeline can detect and convert to interactive Run blocks.
+   */
+  private injectJSONExtractor(): void {
+    if (document.querySelector('script[data-mcp-extractor]')) return; // already injected
+    const script = document.createElement('script');
+    script.setAttribute('data-mcp-extractor', 'true');
+    script.src = chrome.runtime.getURL('json_function_call_extractor.js');
+    document.head.appendChild(script);
+    logger.debug('Injected json_function_call_extractor.js into M365 page');
   }
 
   /**

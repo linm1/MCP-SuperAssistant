@@ -2,6 +2,7 @@
 import { jsonSchemaToCsn } from './schema_converter';
 import { chatgptInstructions } from './website_specific_instruction/chatgpt';
 import { geminiInstructions } from './website_specific_instruction/gemini';
+import { m365CopilotInstructions } from './website_specific_instruction/m365copilot';
 import { createLogger } from '@extension/shared/lib/logger';
 
 /**
@@ -137,6 +138,11 @@ Do not use <thoughts> tag in your output, that is just output format reference t
   //# ChatGPT-Specific Instructions
   if (currentHost.includes('chatgpt')) {
     instructions += chatgptInstructions;
+  }
+
+  //# M365 Copilot-Specific Instructions
+  if (currentHost.includes('m365.cloud.microsoft') || currentHost.includes('cloud.microsoft')) {
+    instructions += m365CopilotInstructions;
   }
 
   // instructions += 'To use an MCP tool, wrap your tool call in `<use_mcp_tool>` tags like this:\n\n';

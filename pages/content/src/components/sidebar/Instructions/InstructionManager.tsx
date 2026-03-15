@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-// import { generateInstructions } from './instructionGenerator';
 import { generateInstructionsJson } from './instructionGeneratorJson';
+import { generateInstructionsM365Json } from './instructionGeneratorM365Json';
 import { useUserPreferences, useToolEnablement } from '../../../hooks';
 import { useToolStore } from '../../../stores/tool.store';
 import { Typography } from '../ui';
@@ -155,15 +155,15 @@ const InstructionManager: React.FC<InstructionManagerProps> = ({ adapter, tools 
   }, [preferences]);
 
   // Generate instructions with custom instructions - memoized to prevent excessive calls
+  // M365 Copilot requires plain-text JSON output (no code fences, no XML) because:
+  // - ```jsonl blocks are not rendered as <pre> elements in M365
+  // - XML <function_calls> triggers M365's page-creation feature instead of text output
   const generateCurrentInstructions = useCallback(() => {
-    // return generateInstructions(enabledTools, customInstructions, customInstructionsEnabled);
-
-    // if (adapter.name === 'OpenRouterAdapter') {
-    //   return generateInstructions(enabledTools, customInstructions, customInstructionsEnabled);
-    // }
-
+    if (adapter?.name === 'M365CopilotAdapter') {
+      return generateInstructionsM365Json(enabledTools, customInstructions, customInstructionsEnabled);
+    }
     return generateInstructionsJson(enabledTools, customInstructions, customInstructionsEnabled);
-  }, [enabledTools, customInstructions, customInstructionsEnabled]);
+  }, [adapter, enabledTools, customInstructions, customInstructionsEnabled]);
 
   // Memoize the actual current instructions to prevent unnecessary re-calculations
   const currentInstructions = useMemo(() => {

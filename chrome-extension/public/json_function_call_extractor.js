@@ -205,6 +205,47 @@
   }
   
   /**
+   * Fallback: extract JSON using the element's full textContent.
+   * M365 Copilot can render markdown inside JSON parameter values as real HTML
+   * (e.g., <em>word</em>), which splits a single logical text node into multiple
+   * DOM nodes. Per-text-node processing then fails because no single node contains
+   * both function_call_start and function_call_end. This fallback reads the
+   * combined textContent (which strips all HTML tags) and replaces the element's
+   * content with a clean <pre class="json-function-call"> element.
+   */
+  function processElementByTextContent(element) {
+    const text = element.textContent || '';
+    if (!text.includes('"type"') || !text.includes('function_call')) {
+      return false;
+    }
+
+    INLINE_JSON_PATTERN.lastIndex = 0;
+    const match = INLINE_JSON_PATTERN.exec(text);
+    if (!match) return false;
+
+    const jsonContent = match[1];
+    const objects = extractJSONObjects(jsonContent);
+    if (objects.length === 0 || !isCompleteFunctionCall(objects)) return false;
+
+    // Rebuild clean JSON from parsed objects (strips any HTML artifacts in values)
+    const cleanJson = objects.map(o => JSON.stringify(o.parsed)).join('\n');
+    const pre = createPreElement(cleanJson);
+
+    // Replace element content with the <pre> block
+    while (element.firstChild) element.removeChild(element.firstChild);
+    element.appendChild(pre);
+
+    element.setAttribute(CONFIG.processedAttribute, 'true');
+    processedElements.add(element);
+
+    if (CONFIG.debug) {
+      console.debug('[json-extractor] Processed element via textContent fallback:', element.tagName, element.className);
+    }
+
+    return true;
+  }
+
+  /**
    * Process an element and its text nodes
    */
   function processElement(element) {
@@ -212,20 +253,20 @@
     if (processedElements.has(element)) {
       return false;
     }
-    
+
     // Skip <pre>, <code>, <script>, <style> elements
     const tagName = element.tagName?.toLowerCase();
     if (['pre', 'code', 'script', 'style'].includes(tagName)) {
       return false;
     }
-    
+
     // Skip elements that already have extracted JSON
     if (element.hasAttribute(CONFIG.processedAttribute)) {
       return false;
     }
-    
+
     let modified = false;
-    
+
     // Get all direct text nodes (not nested)
     const textNodes = [];
     for (let i = 0; i < element.childNodes.length; i++) {
@@ -242,41 +283,52 @@
         }
       }
     }
-    
+
     // Process each text node
     for (const textNode of textNodes) {
       if (processTextNode(textNode)) {
         modified = true;
       }
     }
-    
+
+    // Fallback: if no modification yet, try matching against the full textContent.
+    // This handles cases where M365 renders inline HTML (e.g. <em>, <strong>) inside
+    // JSON parameter values, which splits the logical text across multiple DOM nodes.
+    if (!modified) {
+      modified = processElementByTextContent(element);
+    }
+
     if (modified) {
       element.setAttribute(CONFIG.processedAttribute, 'true');
       processedElements.add(element);
-      
+
       if (CONFIG.debug) {
         console.debug('[json-extractor] Processed element:', element.tagName, element.className);
       }
     }
-    
+
     return modified;
   }
   
   /**
-   * Scan only <message-content> tags for JSON patterns
+   * Scan known AI response containers for JSON patterns.
+   * Supports multiple site DOM structures:
+   *  - <message-content>: custom element used by some chat UIs
+   *  - [data-testid="markdown-reply"]: M365 Copilot's AI response container
    */
   function scanDocument() {
     if (CONFIG.debug) {
-      console.debug('[json-extractor] Starting document scan (message-content only)');
+      console.debug('[json-extractor] Starting document scan');
     }
-    
+
     let processedCount = 0;
-    
-    // Only target <message-content> tags
-    const messageContentElements = document.querySelectorAll('message-content');
-    
+
+    const messageContentElements = document.querySelectorAll(
+      'message-content, [data-testid="markdown-reply"]'
+    );
+
     if (CONFIG.debug) {
-      console.debug('[json-extractor] Found', messageContentElements.length, 'message-content elements');
+      console.debug('[json-extractor] Found', messageContentElements.length, 'AI response container elements');
     }
     
     for (const element of messageContentElements) {

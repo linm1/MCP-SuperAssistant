@@ -204,6 +204,18 @@ export const WEBSITE_CONFIGS: Array<{
         useCodeMirrorExtraction: true
       },
     },
+    {
+      // M365 Copilot: AI responses appear inside [data-testid="markdown-reply"] divs.
+      // json_function_call_extractor.js scans these and wraps inline plain-text JSON
+      // in <pre class="json-function-call"> elements via INLINE_JSON_PATTERN.
+      // Note: code fences (```json/```jsonl) render as plain text in M365, not as <pre>.
+      urlPattern: 'm365.cloud.microsoft',
+      config: {
+        targetSelectors: ['pre.json-function-call', 'pre', 'code'],
+        streamingContainerSelectors: ['[data-testid="markdown-reply"]', '[data-testid="lastChatMessage"]'],
+        function_result_selector: [],
+      },
+    },
     // Add more website-specific configurations as needed
     // Example:
     // {
